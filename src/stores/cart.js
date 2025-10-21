@@ -21,8 +21,14 @@ export const useCartStore = defineStore('cart', {
       const userStore = useUserStore()
       if (!userStore.isLoggedIn) throw new Error('NOT_LOGGED_IN')
 
-      if (product.stock <= 0) {
+      const res = await axios.get(`http://localhost:3000/products/${product.id}`)
+      const realProduct = res.data
+
+      if (!realProduct || realProduct.stock <= 0) {
         alert('Sản phẩm này đã hết hàng!')
+        if (realProduct) await axios.delete(`http://localhost:3000/products/${product.id}`)
+        this.items = this.items.filter(i => i.id !== product.id)
+        this.persist()
         return
       }
 
@@ -30,15 +36,20 @@ export const useCartStore = defineStore('cart', {
       const found = this.items.find(i => i.id === product.id)
 
       if (found) {
-        found.qty = Math.min(found.qty + q, product.stock)
+        if (found.qty + q > realProduct.stock) {
+          alert('Số lượng vượt quá tồn kho!')
+          found.qty = realProduct.stock
+        } else {
+          found.qty += q
+        }
       } else {
         this.items.push({
           id: product.id,
           name: product.name,
           price: product.price,
           image: product.image,
-          qty: Math.min(q, product.stock),
-          stock: product.stock
+          qty: Math.min(q, realProduct.stock),
+          stock: realProduct.stock
         })
       }
 
@@ -55,12 +66,22 @@ export const useCartStore = defineStore('cart', {
       else this.persist()
     },
 
-    inc(id) {
+    async inc(id) {
       const it = this.items.find(i => i.id === id)
-      if (it) {
-        if (it.qty < it.stock) this.update(id, it.qty + 1)
-        else alert('Đã đạt số lượng tối đa trong kho!')
+      if (!it) return
+
+      const res = await axios.get(`http://localhost:3000/products/${id}`)
+      const realProduct = res.data
+
+      if (!realProduct || realProduct.stock <= 0) {
+        alert('Sản phẩm này đã hết hàng!')
+        await axios.delete(`http://localhost:3000/products/${id}`)
+        this.remove(id)
+        return
       }
+
+      if (it.qty < realProduct.stock) this.update(id, it.qty + 1)
+      else alert('Đã đạt số lượng tối đa trong kho!')
     },
 
     dec(id) {
@@ -81,7 +102,6 @@ export const useCartStore = defineStore('cart', {
       this.persist()
     },
 
-    //  Thanh toán & lưu đơn hàng
     async checkout() {
       const userStore = useUserStore()
       if (!userStore.isLoggedIn) throw new Error('NOT_LOGGED_IN')
@@ -90,9 +110,8 @@ export const useCartStore = defineStore('cart', {
         return
       }
 
-      //  1. Tạo đơn hàng
       const order = {
-        id: Date.now(), //  thêm ID để json-server nhận dạng đúng
+        id: Date.now(),
         userId: Number(userStore.user.id),
         username: userStore.user.username,
         total: this.total,
@@ -106,25 +125,24 @@ export const useCartStore = defineStore('cart', {
         }))
       }
 
-      //  2. Lưu đơn hàng vào db.json
       await axios.post('http://localhost:3000/orders', order)
 
-      //  3. Cập nhật tồn kho
       for (const item of this.items) {
         const res = await axios.get(`http://localhost:3000/products/${item.id}`)
         const product = res.data
         const newStock = Math.max(0, product.stock - item.qty)
-        await axios.patch(`http://localhost:3000/products/${item.id}`, { stock: newStock })
 
         if (newStock === 0) {
           await axios.delete(`http://localhost:3000/products/${item.id}`)
+        } else {
+          await axios.patch(`http://localhost:3000/products/${item.id}`, { stock: newStock })
         }
       }
 
-      // 🟢 4. Xóa giỏ hàng & chuyển trang Profile
       this.clear()
-      alert('✅ Đặt hàng thành công! Đơn của bạn đang chờ xử lý.')
-      window.location.href = '/profile' // 👈 chuyển user qua trang theo dõi đơn
+      alert('Đặt hàng thành công! Đơn của bạn đang chờ xử lý.')
+      window.location.href = '/profile'
     }
   }
 })
+

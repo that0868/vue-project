@@ -13,17 +13,17 @@ const fetchOrders = async () => {
 const updateStatus = async (order, newStatus) => {
   await axios.patch(`${api}/${order.id}`, { status: newStatus })
   order.status = newStatus
+  await fetchOrders() // cập nhật lại danh sách sau khi đổi trạng thái
 }
 
-// 🟢 Xóa đơn hàng
 const deleteOrder = async (id) => {
   if (!confirm('Bạn có chắc muốn xóa đơn hàng này?')) return
   try {
     await axios.delete(`${api}/${id}`)
-    orders.value = orders.value.filter(o => o.id !== id)
+    await fetchOrders() // làm mới danh sách sau khi xóa
     alert('Đã xóa đơn hàng thành công!')
   } catch (err) {
-    console.error('❌ Lỗi khi xóa đơn hàng:', err)
+    console.error('Lỗi khi xóa đơn hàng:', err)
     alert('Không thể xóa đơn hàng! Kiểm tra console hoặc db.json.')
   }
 }

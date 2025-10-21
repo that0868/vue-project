@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import axios from 'axios'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -7,58 +8,65 @@ export const useUserStore = defineStore('user', {
   }),
 
   getters: {
-    //  Kiểm tra đăng nhập (true nếu có token)
     isLoggedIn: (s) => !!s.token,
-
-    //  Lấy vai trò (admin/user/guest)
     role: (s) => s.user?.role || 'guest',
-
-    //  Tên hiển thị
     username: (s) => s.user?.username || ''
   },
 
   actions: {
-    //  Đăng nhập (mock auth, client-side)
-    login({ username, password }) {
+    // Đăng nhập
+    async login({ username, password }) {
       if (!username || !password) throw new Error('Thiếu thông tin')
 
-      //  Giả lập người dùng như trong db.json
-      const records = [
-        { username: 'admin', password: '123456', role: 'admin' },
-        { username: 'user', password: '123456', role: 'user' },
-      ]
+      // Lấy danh sách users thật từ db.json
+      const res = await axios.get('http://localhost:3000/users')
+      const users = res.data || []
 
-      const found = records.find(
+      const found = users.find(
         (u) => u.username === username && u.password === password
       )
+
       if (!found) throw new Error('Sai tài khoản hoặc mật khẩu')
-        
 
-      // Lưu user + token
-      this.user = { id: Date.now(), username: found.username, role: found.role }
+      this.user = { id: found.id, username: found.username, role: found.role }
       this.token = 'mock-token-' + Date.now()
-
-      
-
       localStorage.setItem('user', JSON.stringify(this.user))
       localStorage.setItem('token', this.token)
     },
 
-    // 🚪 Đăng xuất
+    // Đăng xuất
     logout() {
+      const ok = confirm('Bạn có chắc chắn muốn đăng xuất không?')
+      if (!ok) return
+
       this.user = null
       this.token = ''
       localStorage.removeItem('user')
       localStorage.removeItem('token')
+      alert('Đăng xuất thành công!')
+      window.location.href = '/'
     },
 
-    //  Đăng ký giả lập
-    register({ username, password }) {
+    // Đăng ký (lưu vào db.json thật)
+    async register({ username, password }) {
       if (!username || !password) throw new Error('Thiếu thông tin')
-      return true // mock register ok
+
+      // Lấy danh sách users hiện tại
+      const res = await axios.get('http://localhost:3000/users')
+      const users = res.data || []
+
+      // Kiểm tra trùng username
+      if (users.some(u => u.username === username))
+        throw new Error('Tên người dùng đã tồn tại')
+
+      // Tạo mới và lưu vào db.json
+      const newUser = { username, password, role: 'user' }
+      await axios.post('http://localhost:3000/users', newUser)
+
+      alert('Tạo tài khoản thành công!')
+      return true
     },
 
-    //  Hàm hỗ trợ thêm cho Cart, Checkout,...
     requireLogin() {
       if (!this.token) {
         throw new Error('NOT_LOGGED_IN')
@@ -66,3 +74,4 @@ export const useUserStore = defineStore('user', {
     }
   }
 })
+

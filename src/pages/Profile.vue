@@ -7,7 +7,7 @@ const userStore = useUserStore()
 const orders = ref([])
 const api = 'http://localhost:3000/orders'
 
-// 🟢 Lấy danh sách đơn hàng theo userId
+// Lấy danh sách đơn hàng theo userId
 const fetchOrders = async () => {
   if (!userStore.isLoggedIn) return
   try {
@@ -21,6 +21,7 @@ const fetchOrders = async () => {
 }
 
 onMounted(fetchOrders)
+setInterval(fetchOrders, 3000)
 </script>
 
 <template>
